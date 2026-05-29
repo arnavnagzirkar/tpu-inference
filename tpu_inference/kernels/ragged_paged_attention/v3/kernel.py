@@ -594,7 +594,8 @@ def _ragged_paged_attention_kernel_loop(
 
         if not wait:
             # Make sure the current bkv buffer is safe to overwrite.
-            wait_update_kv_cache(bkv_sem_idx)
+            if update_kv_cache:
+                wait_update_kv_cache(bkv_sem_idx)
 
             # Fetch effective kv from kv cache. To pipeline multiple DMA calls, we
             # utilize static for loop instead of dynamic for loop.
@@ -1106,7 +1107,8 @@ def _ragged_paged_attention_kernel_loop(
     def epilogue():
         for i in range(2):
             wait_send_bo(bo_sem_idx=i)
-            wait_update_kv_cache(bkv_sem_idx=i)
+            if update_kv_cache:
+                wait_update_kv_cache(bkv_sem_idx=i)
 
     ### ------- Kernel end ------- ###
 

@@ -812,6 +812,7 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
         self,
         grammar_output: "GrammarOutput | None",
     ) -> ModelRunnerOutput | AsyncTPUModelRunnerOutput:
+        print("DEBUG [Host]: Entering sample_tokens...")
         if self.execute_model_state is None:
             # This can happen in pipeline parallel case.
             return EMPTY_MODEL_RUNNER_OUTPUT
@@ -1015,6 +1016,9 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
         # TODO: make _get_input_ids_embeds within this context
         # NOTE: right now, mm model will use embeddings as the input,
         # but text-only model will use input_ids
+        print(
+            f"DEBUG [Host]: Dispatching target model_fn (reqs={self.input_batch.num_reqs}, toks={scheduler_output.total_num_scheduled_tokens})"
+        )
         with self.maybe_forbid_compile:
             with set_forward_context(
                     None,
@@ -1023,6 +1027,40 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
                     scheduler_output) as kv_connector_output:
                 # NOTE(Wenlong): It takes both `input_ids` and `inputs_embeds`,
                 # but one of them would be `None`
+                print(
+                    f"DEBUG [JAX Input]: reqs={self.input_batch.num_reqs}, toks={scheduler_output.total_num_scheduled_tokens}",
+                    flush=True)
+                if input_ids is not None:
+                    print(
+                        f"DEBUG [JAX Input]: input_ids shape={input_ids.shape}",
+                        flush=True)
+                if input_positions is not None:
+                    print(
+                        f"DEBUG [JAX Input]: input_positions shape={input_positions.shape}",
+                        flush=True)
+                if attn_metadata is not None:
+                    if isinstance(attn_metadata, dict):
+                        first_key = next(iter(attn_metadata.keys()))
+                        am = attn_metadata[first_key]
+                        print(
+                            f"DEBUG [JAX Input]: dict attn_metadata key={first_key}",
+                            flush=True)
+                    else:
+                        am = attn_metadata
+                    print(
+                        f"DEBUG [JAX Input]: active_num_reqs={self.input_batch.num_reqs}, padded_num_reqs={am.padded_num_reqs}",
+                        flush=True)
+                    print(
+                        f"DEBUG [JAX Input]: seq_lens shape={am.seq_lens.shape}",
+                        flush=True)
+                    print(
+                        f"DEBUG [JAX Input]: query_start_loc shape={am.query_start_loc.shape}",
+                        flush=True)
+                    if am.block_tables is not None:
+                        print(
+                            f"DEBUG [JAX Input]: block_tables shape={am.block_tables.shape}",
+                            flush=True)
+
                 (self.kv_caches, hidden_states, aux_hidden_states,
                  expert_indices) = self.model_fn(
                      self.state_leaves,
@@ -1037,6 +1075,15 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
                      self.is_first_rank,
                      self.is_last_rank,
                  )
+            print(
+                "DEBUG [Host]: Target model_fn dispatched. Waiting for completion...",
+                flush=True)
+            if hidden_states is not None:
+                if hasattr(hidden_states, "block_until_ready"):
+                    hidden_states.block_until_ready()
+                elif isinstance(hidden_states, jax.Array):
+                    hidden_states.block_until_ready()
+            print("DEBUG [Host]: Target model_fn finished.", flush=True)
             if not self.is_last_rank:
                 assert isinstance(hidden_states, JaxIntermediateTensors)
                 hidden_states.kv_connector_output = kv_connector_output
@@ -1097,6 +1144,12 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
                 lora_metadata,
             )
 
+        if logits is not None:
+            print("DEBUG [Host]: Waiting for verifier forward logits...",
+                  flush=True)
+            logits.block_until_ready()
+            print("DEBUG [Host]: Verifier forward logits ready!", flush=True)
+
         self.execute_model_state = ExecuteModelState(
             scheduler_output=scheduler_output,
             attn_metadata=attn_metadata,
@@ -1145,6 +1198,8 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
             step_rng = self.rng_params_for_sampling
 
         if spec_decode_metadata is None:
+            print("DEBUG [Host]: Non-speculative sample path selected.",
+                  flush=True)
             logits = logits.astype(jnp.float32)
             with self.maybe_forbid_compile:
                 next_tokens, processed_logits = sample(
@@ -1153,26 +1208,53 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
                     logits,
                     tpu_sampling_metadata,
                 )
+            print("DEBUG [Host]: Non-speculative sample finished.", flush=True)
         else:
+            print("DEBUG [Host]: Speculative sample path selected.",
+                  flush=True)
             if tpu_sampling_metadata.do_sampling:
+                print("DEBUG [Host]: Splitting RNG...", flush=True)
                 bonus_rng, rejection_rng = jax.random.split(step_rng)
             else:
                 bonus_rng = step_rng
                 rejection_rng = step_rng
+            print("DEBUG [Host]: Selecting bonus logits...", flush=True)
+            print(
+                f"DEBUG [Host]: logits shape={logits.shape}, dtype={logits.dtype}, sharding={getattr(logits, 'sharding', None)}",
+                flush=True)
+            print(
+                f"DEBUG [Host]: bonus_logits_indices shape={spec_decode_metadata.bonus_logits_indices.shape}, dtype={spec_decode_metadata.bonus_logits_indices.dtype}, sharding={getattr(spec_decode_metadata.bonus_logits_indices, 'sharding', None)}",
+                flush=True)
             bonus_logits = self._select_from_array_fn(
                 logits, spec_decode_metadata.bonus_logits_indices)
+            print("DEBUG [Host]: Sampling bonus tokens...", flush=True)
             bonus_token_ids, _ = sample(
                 bonus_rng,
                 self.mesh,
                 bonus_logits,
                 tpu_sampling_metadata,
             )
+            print("DEBUG [Host]: Selecting target logits...", flush=True)
+            print(
+                f"DEBUG [Host]: target_logits_indices shape={spec_decode_metadata.target_logits_indices.shape}, dtype={spec_decode_metadata.target_logits_indices.dtype}, sharding={getattr(spec_decode_metadata.target_logits_indices, 'sharding', None)}",
+                flush=True)
             target_logits = self._select_from_array_fn(
                 logits, spec_decode_metadata.target_logits_indices)
             assert input_ids is not None
+            print("DEBUG [Host]: Extracting draft token IDs...", flush=True)
+            print(
+                f"DEBUG [Host]: input_ids shape={input_ids.shape}, dtype={input_ids.dtype}, sharding={getattr(input_ids, 'sharding', None)}",
+                flush=True)
+            print(
+                f"DEBUG [Host]: final_logits_indices shape={spec_decode_metadata.final_logits_indices.shape}, dtype={spec_decode_metadata.final_logits_indices.dtype}, sharding={getattr(spec_decode_metadata.final_logits_indices, 'sharding', None)}",
+                flush=True)
             draft_token_ids = self._extract_draft_token_ids(
                 input_ids, spec_decode_metadata.final_logits_indices,
                 spec_decode_metadata.target_logits_indices)
+            print(
+                f"DEBUG [Host]: Dispatching rejection_sampler (draft_lengths={spec_decode_metadata.draft_lengths})",
+                flush=True,
+            )
             next_tokens = self.rejection_sampler(
                 draft_token_ids=draft_token_ids,
                 num_draft_tokens=spec_decode_metadata.draft_lengths,
@@ -1182,6 +1264,12 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
                 sampling_metadata=tpu_sampling_metadata,
                 key=rejection_rng,
             )
+            print(
+                "DEBUG [Host]: Rejection_sampler dispatched. Waiting for completion...",
+                flush=True)
+            if next_tokens is not None:
+                next_tokens.block_until_ready()
+            print("DEBUG [Host]: Rejection_sampler finished.", flush=True)
 
         logits = logits.astype(jnp.float32)
         if full_logits is not None:
@@ -1250,6 +1338,7 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
                     self.speculative_config.num_speculative_tokens,
                     self.input_batch.vocab_size,
                     self.max_num_reqs // self.dp_size, self.mesh)
+                print("DEBUG [Host]: Dispatching proposer...")
                 self.speculative_decoding_manager.propose_draft_token_ids(
                     next_tokens,
                     logits_indices_selector,
@@ -1264,6 +1353,16 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
                     input_ids,
                     full_hidden_states,
                 )
+                print(
+                    "DEBUG [Host]: Proposer dispatched. Waiting for completion...",
+                    flush=True)
+                draft_tokens = self.speculative_decoding_manager._draft_token_ids
+                if draft_tokens is not None:
+                    if hasattr(draft_tokens, "block_until_ready"):
+                        draft_tokens.block_until_ready()
+                    elif isinstance(draft_tokens, jax.Array):
+                        draft_tokens.block_until_ready()
+                print("DEBUG [Host]: Proposer finished.", flush=True)
                 spec_decode_last_sampled_token_id = last_sampled_token_id
                 spec_decode_num_rejected_tokens = num_rejected_tokens
 
@@ -1413,6 +1512,10 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
 
     @jax.jit(static_argnums=(0, ))
     def _select_from_array_fn(self, array, indices_to_select):
+        attn_data_size = common_utils.get_mesh_shape_product(
+            self.mesh, ShardingAxisName.ATTN_DATA)
+        if attn_data_size == 1:
+            return array[indices_to_select]
 
         def select_local_fn(local_array, local_indices):
             return local_array[local_indices]
@@ -1430,6 +1533,11 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
     @jax.jit(static_argnums=(0, ))
     def _extract_draft_token_ids(self, input_ids, logits_indices,
                                  target_logits_indices):
+        attn_data_size = common_utils.get_mesh_shape_product(
+            self.mesh, ShardingAxisName.ATTN_DATA)
+        if attn_data_size == 1:
+            draft_token_ids = input_ids[logits_indices]
+            return draft_token_ids[target_logits_indices + 1]
 
         def _fn(local_input_ids, local_logits_indices,
                 local_target_logits_indices):
@@ -1703,6 +1811,7 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
         return seq_lens, positions
 
     def _prepare_inputs(self, scheduler_output: "VllmSchedulerOutput"):
+        print("DEBUG [Host]: _prepare_inputs started.", flush=True)
         total_num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
         assert total_num_scheduled_tokens > 0
         num_reqs = self.input_batch.num_reqs
@@ -1854,7 +1963,8 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
                 num_scheduled_tokens_per_req,
                 out=query_start_loc_cpu[1:_num_reqs + 1],
             )
-            query_start_loc_cpu[_num_reqs + 1:] = 1
+            query_start_loc_cpu[_num_reqs +
+                                1:] = query_start_loc_cpu[_num_reqs]
 
             seq_lens_cpu[:_num_reqs] = (
                 self.input_batch.num_computed_tokens_cpu[req_indices] +
@@ -2088,6 +2198,37 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
                 total_num_scheduled_tokens,
                 padded_total_num_scheduled_tokens,
             )
+
+        print(
+            "DEBUG [Host]: _prepare_inputs complete. Waiting for synchronization...",
+            flush=True)
+        if input_ids is not None:
+            print("DEBUG [Host]: Waiting for input_ids...", flush=True)
+            input_ids.block_until_ready()
+        if positions is not None:
+            print("DEBUG [Host]: Waiting for positions...", flush=True)
+            positions.block_until_ready()
+        if isinstance(attention_metadata, dict):
+            print("DEBUG [Host]: Waiting for dict attention_metadata...",
+                  flush=True)
+            for k, v in attention_metadata.items():
+                if v.query_start_loc is not None:
+                    v.query_start_loc.block_until_ready()
+                if v.seq_lens is not None:
+                    v.seq_lens.block_until_ready()
+                if v.block_tables is not None:
+                    v.block_tables.block_until_ready()
+        else:
+            print("DEBUG [Host]: Waiting for attention_metadata...",
+                  flush=True)
+            if attention_metadata.query_start_loc is not None:
+                attention_metadata.query_start_loc.block_until_ready()
+            if attention_metadata.seq_lens is not None:
+                attention_metadata.seq_lens.block_until_ready()
+            if attention_metadata.block_tables is not None:
+                attention_metadata.block_tables.block_until_ready()
+        print("DEBUG [Host]: _prepare_inputs synchronized successfully.",
+              flush=True)
 
         return (
             input_ids,

@@ -66,6 +66,8 @@ class Eagle3Proposer:
         self.rng_key = jax.random.key(self.vllm_config.model_config.seed)
         self.max_num_tokens = runner.max_num_tokens
         self.token_arange = jnp.arange(self.max_num_tokens)
+        self.constant_draft_positions = self.speculative_config.use_gemma4_mtp(
+        )
 
     def load_model(self, target_model: Any) -> None:
         """Loads the draft model."""
@@ -144,6 +146,11 @@ class Eagle3Proposer:
                 if not jnp.any(draft_embed_param.value):
                     logger.info(
                         "Draft model does not have embedding. Setting draft model's embed_tokens to target model's embed"
+                    )
+                    draft_embed_param.value = target_embed_param.value
+                elif self.speculative_config.use_gemma4_mtp():
+                    logger.info(
+                        "Setting draft model's embed_tokens to target model's embed unconditionally (Gemma4-MTP/KV-sharing layout)"
                     )
                     draft_embed_param.value = target_embed_param.value
                 elif jnp.array_equal(draft_embed_param.value,
@@ -255,6 +262,21 @@ class Eagle3Proposer:
          )(positions, seq_lens, block_tables)
         return positions, clamped_positions, new_seq_lens, query_start_loc, new_block_tables
 
+    def _get_loop_query_start_loc(self, positions: jax.Array) -> jax.Array:
+        """JIT-compiled helper for generating query_start_loc inside speculation loop."""
+
+        def _sharded_get(positions):
+            num_reqs = positions.shape[0]
+            return jnp.arange(num_reqs + 1)
+
+        data_spec = PartitionSpec(ShardingAxisName.ATTN_DATA)
+        return jax.shard_map(
+            _sharded_get,
+            mesh=self.mesh,
+            in_specs=(data_spec, ),
+            out_specs=data_spec,
+        )(positions)
+
     def _stack_draft_token_ids(
             self, draft_token_ids_list: list[jax.Array]) -> jnp.ndarray:
         """JIT-compiled helper for stacking draft token IDs."""
@@ -305,21 +327,32 @@ class Eagle3Proposer:
         Returns updated AttentionMetadata (positions, query_start_loc, seq_lens)
         and the selected `target_token_ids` and `target_hidden_states`.
         """
+        print("DEBUG [Host]: Eagle3Proposer.prepare_inputs started.",
+              flush=True)
         assert aux_hidden_states is not None and len(aux_hidden_states) > 0, (
             f"{self.method} requires auxiliary hidden states from the target model."
         )
 
         # The last KV cache group is for the draft model.
         num_kv_cache_groups = len(self.runner.kv_cache_config.kv_cache_groups)
+        print(f"DEBUG [Host]: num_kv_cache_groups={num_kv_cache_groups}",
+              flush=True)
         draft_kv_cache_group_id = num_kv_cache_groups - 1
+        print(
+            f"DEBUG [Host]: draft_kv_cache_group_id={draft_kv_cache_group_id}",
+            flush=True)
         block_tables = self.runner.input_batch.block_table[
             draft_kv_cache_group_id].get_cpu_tensor().reshape(-1)
+        print("DEBUG [Host]: block_tables retrieved from CPU.", flush=True)
         block_tables = device_array(self.mesh,
                                     block_tables,
                                     sharding=PartitionSpec(
                                         ShardingAxisName.ATTN_DATA))
+        print("DEBUG [Host]: block_tables pushed to device.", flush=True)
         num_reqs = num_reqs_dp
-        return self._prepare_inputs(
+
+        print("DEBUG [Host]: Calling JITted _prepare_inputs...", flush=True)
+        outputs = self._prepare_inputs(
             state_leaves=self.state_leaves,
             num_reqs=num_reqs,
             block_tables=block_tables,
@@ -330,6 +363,17 @@ class Eagle3Proposer:
             next_prompt_token_id=next_prompt_token_id,
             is_in_prefill=is_in_prefill,
             num_rejected_tokens=num_rejected_tokens)
+        print("DEBUG [Host]: JITted _prepare_inputs dispatched.", flush=True)
+
+        # Force sync to see if the JITted call hung!
+        print("DEBUG [Host]: Waiting for _prepare_inputs completion...",
+              flush=True)
+        for x in outputs[:3]:
+            if isinstance(x, jax.Array):
+                x.block_until_ready()
+        print("DEBUG [Host]: Eagle3Proposer.prepare_inputs finished.",
+              flush=True)
+        return outputs
 
     @jax.jit(static_argnums=(0, ))
     def _prepare_inputs(
@@ -526,9 +570,12 @@ class Eagle3Proposer:
                 #    whereas Eagle uses intermediate residuals.
                 # 2. M-RoPE positions are 2D (3, total_tokens), requiring specific dim-1 slicing
                 #    which _select_inputs_for_loop_speculation does not support.
-                positions = positions[:, last_token_indices]
-                hidden_states = hidden_states[last_token_indices]
-                return positions, hidden_states
+                if positions.ndim == 2:
+                    positions = positions[:, last_token_indices]
+                else:
+                    positions = positions[last_token_indices]
+                residual = residual[last_token_indices]
+                return positions, residual
 
             positions = positions[last_token_indices]
             residual = residual[last_token_indices]
@@ -600,6 +647,9 @@ class Eagle3Proposer:
             draft token IDs.
         """
 
+        print(
+            f"DEBUG [Host]: Proposer _propose started. spec_step_idx=0. input_ids shape: {input_ids.shape}"
+        )
         kv_caches, hidden_states, residual, _ = self.model_fn(
             state_leaves,
             kv_caches,
@@ -609,6 +659,7 @@ class Eagle3Proposer:
             layer_name_to_kvcache_index,
             spec_step_idx=0,
         )
+        print("DEBUG [Host]: Proposer model_fn step 0 dispatched.")
 
         if num_speculative_tokens == 1:
             return kv_caches, self._select_draft_token_ids(
@@ -617,13 +668,23 @@ class Eagle3Proposer:
         positions, hidden_states, draft_token_ids = self._select_inputs_for_loop_speculation(
             state_leaves, attn_metadata.input_positions, residual[0],
             hidden_states, last_token_indices)
+
         draft_token_ids_list = [draft_token_ids]
 
         for i in range(num_speculative_tokens - 1):
             input_ids_loop = draft_token_ids_list[-1]
 
-            positions, clamped_positions, new_seq_lens, query_start_loc, new_block_tables = self._update_inputs_for_loop_speculation(
-                positions, attn_metadata.seq_lens, attn_metadata.block_tables)
+            if self.constant_draft_positions:
+                # For Gemma4-MTP sharing verifier caches: positions, sequence lengths, and block tables remain constant.
+                clamped_positions = positions
+                new_seq_lens = attn_metadata.seq_lens
+                query_start_loc = self._get_loop_query_start_loc(positions)
+                new_block_tables = attn_metadata.block_tables
+            else:
+                # Eagle3: advance positions sequentially
+                positions, clamped_positions, new_seq_lens, query_start_loc, new_block_tables = self._update_inputs_for_loop_speculation(
+                    positions, attn_metadata.seq_lens,
+                    attn_metadata.block_tables)
 
             attn_metadata = replace(
                 attn_metadata,
@@ -631,6 +692,9 @@ class Eagle3Proposer:
                 seq_lens=new_seq_lens,
                 query_start_loc=query_start_loc,
                 block_tables=new_block_tables,
+            )
+            print(
+                f"DEBUG [Host]: Proposer loop step {i+1} dispatching... input_ids_loop shape: {input_ids_loop.shape}"
             )
             kv_caches, new_hidden_states, residual, _ = self.model_fn(
                 state_leaves,
@@ -641,8 +705,8 @@ class Eagle3Proposer:
                 layer_name_to_kvcache_index,
                 spec_step_idx=i + 1,
             )
-            hidden_states = new_hidden_states if self.method == "mtp" else residual[
-                0]
+            print(f"DEBUG [Host]: Proposer loop step {i+1} dispatched.")
+            hidden_states = residual[0]
             draft_token_ids = self._get_draft_token_ids(
                 state_leaves, new_hidden_states)
             draft_token_ids_list.append(draft_token_ids)
