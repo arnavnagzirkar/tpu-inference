@@ -421,10 +421,9 @@ def eagle3_baseline():
 @pytest.mark.parametrize(
     "async_scheduling, enable_dp_attention",
     [
-        (True, True),
         (False, False),
         (True, False),
-        (False, True),
+        (True, True),
     ],
 )
 def test_eagle3_correctness(
@@ -464,8 +463,7 @@ def test_eagle3_correctness(
 
 @pytest.mark.parametrize(
     "max_num_seqs,async_scheduling, enable_dp_attention",
-    [(1, False, False), (20, False, False), (20, True, False),
-     (20, False, True), (20, True, True)],
+    [(1, False, False), (20, True, False), (20, True, True)],
 )
 def test_eagle3_performance(
     monkeypatch: pytest.MonkeyPatch,
@@ -540,11 +538,19 @@ def mtp_baseline():
 
 
 @pytest.mark.skip(reason=_QWEN35_4B_SHARDY_SEGFAULT_REASON)
-@pytest.mark.parametrize("async_scheduling", [False])
+@pytest.mark.parametrize(
+    "async_scheduling, enable_dp_attention",
+    [
+        (False, False),
+        (True, False),
+        (True, True),
+    ],
+)
 def test_mtp_correctness(
     monkeypatch: pytest.MonkeyPatch,
     sampling_config: SamplingParams,
     async_scheduling: bool,
+    enable_dp_attention: bool,
     mtp_baseline: tuple,
 ):
     '''
@@ -570,24 +576,22 @@ def test_mtp_correctness(
         ref_outputs=ref_outputs,
         max_num_seqs=10,
         async_scheduling=async_scheduling,
+        enable_dp_attention=enable_dp_attention,
         extra_kwargs=extra_kwargs,
     )
 
 
 @pytest.mark.skip(reason=_QWEN35_4B_SHARDY_SEGFAULT_REASON)
 @pytest.mark.parametrize(
-    "max_num_seqs,async_scheduling",
-    [
-        (1, False),
-        (20, False),
-        # (20, True),
-    ],
+    "max_num_seqs,async_scheduling, enable_dp_attention",
+    [(1, False, False), (20, True, False), (20, True, True)],
 )
 def test_mtp_performance(
     monkeypatch: pytest.MonkeyPatch,
     sampling_config: SamplingParams,
     max_num_seqs: int,
     async_scheduling: bool,
+    enable_dp_attention: bool,
 ):
     '''
     Test that MTP speculative decoding achieves the expected acceptance rate.
@@ -615,6 +619,7 @@ def test_mtp_performance(
         min_acceptance_rate=0.99,
         max_num_seqs=max_num_seqs,
         async_scheduling=async_scheduling,
+        enable_dp_attention=enable_dp_attention,
         model_name=model_name,
         extra_kwargs=extra_kwargs,
     )
