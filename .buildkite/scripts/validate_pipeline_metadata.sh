@@ -245,6 +245,25 @@ while IFS= read -r file; do
             fi
         done < <(echo "$ALL_FILE_STAGES")
 
+        # Step key and label format (prefix check)
+        INVALID_KEYS=$(yq '.steps[] | select(.key != null and (.key | test("^\$\{BK_KEY(:-|\})") | not)) | .key' "$file")
+        if [[ -n "$INVALID_KEYS" ]]; then
+            echo "+++ ❌ Error: Invalid key format in $file"
+            echo "Found keys without \${BK_KEY} prefix: $INVALID_KEYS"
+            echo "💡 Tip: All step keys must start with \${BK_KEY} to ensure unique identification."
+            echo ""
+            ERRORS_FOUND=1
+        fi
+
+        INVALID_LABELS=$(yq '.steps[] | select(.label != null and (.label | test("^\$\{TPU_VERSION(:-|\})") | not)) | .label' "$file")
+        if [[ -n "$INVALID_LABELS" ]]; then
+            echo "+++ ❌ Error: Invalid label format in $file"
+            echo "Found labels: $INVALID_LABELS"
+            echo "💡 Tip: All step labels must start with '\${TPU_VERSION}'."
+            echo ""
+            ERRORS_FOUND=1
+        fi
+
         # Recording step consistency (record_step_result.sh)
         RECORD_STEPS_JSON=$(yq '[.steps[] | select(.commands != null) | select(.commands[] | test("record_step_result.sh"))]' -o json "$file" || echo "[]")
 
