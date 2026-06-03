@@ -197,8 +197,7 @@ class ShardingConfigManager:
                     "LLM().generate() will hang because vLLM-native "
                     "multi-process DP needs the API frontend to drive each DP "
                     "rank. For offline data parallelism set "
-                    "TPU_MULTIPROCESS_DP=0 to use single-process SPMD DP "
-                    "(see examples/offline_inference_dp.py).")
+                    "TPU_MULTIPROCESS_DP=0 to use single-process SPMD DP.")
             # vLLM spawns the other ranks; this process owns a single replica.
             data_parallelism = 1
         expert_parallelism = sharding_strategy.get("expert_parallelism", 1)
