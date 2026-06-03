@@ -28,12 +28,17 @@ rebinds it on ``amd.model`` directly. It is invoked from
 ``_maybe_patch_for_deepseek_v4`` in ``vllm_model_wrapper`` while ``is_rocm`` is
 forced True and the package has been reloaded onto the AMD implementation.
 """
+import jax
 import torch
 import torch.nn as nn
+import torchax
+from torchax.interop import jax_view
+from torchax.interop import torch_view
 from vllm.config import CacheConfig, VllmConfig
 from vllm.model_executor.layers.attention_layer_base import AttentionLayerBase
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.models.deepseek_v4.attention import DeepseekV4MLA
+from vllm.models.deepseek_v4.attention import DeepseekV4Indexer
 from vllm.v1.attention.backend import AttentionBackend
 from vllm.v1.kv_cache_interface import KVCacheSpec, MLAAttentionSpec
 
@@ -42,6 +47,60 @@ from tpu_inference.layers.vllm.backends.flash_attn_mla import \
 from tpu_inference.logger import init_logger
 
 logger = init_logger(__name__)
+
+
+from tpu_inference.layers.vllm.custom_ops.fused_indexer_topk import streamindex_chunked_topk
+
+class TpuDeepseekV4Indexer(DeepseekV4Indexer):
+    """TPU-compatible DeepSeek-V4 Lightning Indexer with StreamIndex."""
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        qr: torch.Tensor,
+        compressed_kv_score: torch.Tensor,
+        indexer_weights: torch.Tensor,
+        positions: torch.Tensor,
+        rotary_emb: nn.Module,
+    ) -> torch.Tensor:
+        q, _ = self.wq_b(qr)
+        q = q.view(-1, self.n_head, self.head_dim)
+
+        k = self.compressor(compressed_kv_score, positions, rotary_emb)
+
+        from vllm.v1.attention.ops.deepseek_v4_ops import fused_indexer_q_rope_quant
+        q_quant, weights = fused_indexer_q_rope_quant(
+            positions,
+            q,
+            rotary_emb.cos_sin_cache,
+            indexer_weights,
+            self.softmax_scale,
+            self.n_head**-0.5,
+            use_fp4=False,
+        )
+
+        q_quant_jax = jax_view(q_quant)
+        k_jax = jax_view(k)
+        weights_jax = jax_view(weights)
+
+        # Default c_s and c_t match the streamindex defaults, but allow override
+        # for smaller test shapes.
+        c_s = getattr(self, "c_s", 8196)
+        c_t = getattr(self, "c_t", 2048)
+
+        topk_indices_jax = streamindex_chunked_topk(
+            query_projection=q_quant_jax,
+            compressed_keys=k_jax,
+            indexer_weights=weights_jax,
+            k=self.topk_tokens,
+            compression_ratio=self.compress_ratio,
+            c_s=c_s,
+            c_t=c_t
+        )
+
+        topk_idxs = torch_view(topk_indices_jax)
+
+        return topk_idxs
 
 
 # TODO: implement VllmDeepseekV4MLAAttention.
