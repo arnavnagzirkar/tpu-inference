@@ -20,7 +20,7 @@ steps:
       queue: "${TPU_QUEUE_SINGLE:-tpu_v6e_queue}"
     commands:
       - |
-        if [ "${BK_KEY}" = "tpu6e" ]; then
+        if [ "${TPU_VERSION:-tpu6e}" = "tpu6e" ]; then
           buildkite-agent meta-data set "${BK_KEY}_deepseek-ai_DeepSeek-R1_UnitTest" "not enough HBM"
         else
           .buildkite/scripts/run_in_docker.sh \
@@ -69,7 +69,7 @@ steps:
       MINIMUM_ACCURACY_THRESHOLD: "0.84"  # TODO : replace 0 with your accuracy threshold
     commands:
       - |
-        if [ "${BK_KEY}" = "tpu6e" ]; then
+        if [ "${TPU_VERSION:-tpu6e}" = "tpu6e" ]; then
           buildkite-agent meta-data set "${BK_KEY}_deepseek-ai_DeepSeek-R1_Accuracy" "not enough HBM"
         else
           .buildkite/scripts/run_in_docker.sh \

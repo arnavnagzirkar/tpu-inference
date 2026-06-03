@@ -89,7 +89,7 @@ steps:
       MINIMUM_THROUGHPUT_THRESHOLD: 1.80
     commands:
       - |
-        if [ "${BK_KEY}" = "tpu6e" ]; then
+        if [ "${TPU_VERSION:-tpu6e}" = "tpu6e" ]; then
           buildkite-agent meta-data set "${BK_KEY}_google_gemma-4-31B-it_Benchmark" "not enough HBM"
           exit 0
         fi

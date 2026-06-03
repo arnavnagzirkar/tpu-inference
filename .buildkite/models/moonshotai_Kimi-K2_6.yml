@@ -20,7 +20,7 @@ steps:
       queue: "${TPU_QUEUE_MULTI:-tpu_v6e_queue}"
     commands:
       - |
-        if [ "${BK_KEY}" = "tpu6e" ]; then
+        if [ "${TPU_VERSION:-tpu6e}" = "tpu6e" ]; then
           buildkite-agent meta-data set "${BK_KEY}_moonshotai_Kimi-K2_6_UnitTest" "not enough HBM"
         else
           .buildkite/scripts/run_in_docker.sh \

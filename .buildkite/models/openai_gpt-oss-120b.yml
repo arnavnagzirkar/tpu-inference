@@ -24,7 +24,7 @@ steps:
     # TODO(#2318): set proper strict-match threshold.
     commands:
       - |
-        if [ "${BK_KEY}" = "tpu6e" ]; then
+        if [ "${TPU_VERSION:-tpu6e}" = "tpu6e" ]; then
           buildkite-agent meta-data set "${BK_KEY}_openai_gpt-oss-120b_UnitTest" "not enough HBM"
         else
           .buildkite/scripts/run_in_docker.sh \
