@@ -60,8 +60,8 @@ from tpu_inference.layers.common.sharding import (MESH_AXIS_NAMES,
 from tpu_inference.layers.jax.sample.rejection_sampler import RejectionSampler
 from tpu_inference.layers.jax.sample.sampling import (
     PromptLogprobsAsyncData, PromptLogprobsReqSnap,
-    _jax_logprobs_copy_to_host_async, compute_and_gather_logprobs,
-    compute_prompt_logprobs, sample)
+    _apply_sampling_transforms, _jax_logprobs_copy_to_host_async,
+    compute_and_gather_logprobs, compute_prompt_logprobs, sample)
 from tpu_inference.layers.jax.sample.sampling_metadata import \
     TPUSupportedSamplingMetadata
 from tpu_inference.logger import init_logger
@@ -304,7 +304,7 @@ def _jax_logprobs_materialize(
         dp_size = runner.dp_size
         num_reqs = runner.input_batch.num_reqs if num_reqs is None else num_reqs
 
-        padded_tokens_length = spec_decode_metadata.target_logits_indices.shape[
+        padded_tokens_length = spec_decode_metadata.final_logits_indices.shape[
             0]
         assert padded_tokens_length % dp_size == 0
         padded_tokens_length = padded_tokens_length // dp_size
@@ -1391,6 +1391,7 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
         else:
             step_rng = self.rng_params_for_sampling
 
+        processed_bonus_logits = None
         if spec_decode_metadata is None:
             logits = logits.astype(jnp.float32)
             with self.maybe_forbid_compile:
@@ -1408,7 +1409,7 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
                 rejection_rng = step_rng
             bonus_logits = self._select_from_array_fn(
                 logits, spec_decode_metadata.bonus_logits_indices)
-            bonus_token_ids, _ = sample(
+            bonus_token_ids, processed_bonus_logits = sample(
                 bonus_rng,
                 self.mesh,
                 bonus_logits,
@@ -1436,9 +1437,30 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
         with self.maybe_forbid_compile:
 
             if tpu_sampling_metadata.logprobs:
-                logits = processed_logits if self.model_config.logprobs_mode == "processed_logprobs" else logits
+                if spec_decode_metadata is not None:
+                    if (self.model_config.logprobs_mode == "processed_logprobs"
+                            and tpu_sampling_metadata.do_sampling):
+                        processed_target_logits = self._process_target_logits(
+                            target_logits, spec_decode_metadata,
+                            tpu_sampling_metadata)
+                        extended_logits = jnp.concatenate(
+                            [processed_target_logits, processed_bonus_logits],
+                            axis=0)
+                    else:
+                        target_logits_f32 = target_logits.astype(jnp.float32)
+                        bonus_logits_f32 = bonus_logits.astype(jnp.float32)
+                        extended_logits = jnp.concatenate(
+                            [target_logits_f32, bonus_logits_f32], axis=0)
+                    logprobs_logits = extended_logits
+                else:
+                    logprobs_logits = (
+                        processed_logits
+                        if self.model_config.logprobs_mode
+                        == "processed_logprobs"
+                        else logits
+                    )
                 logprobs = compute_and_gather_logprobs(
-                    logits, next_tokens, self.model_config.max_logprobs)
+                    logprobs_logits, next_tokens, self.model_config.max_logprobs)
                 logprobs = _jax_logprobs_copy_to_host_async(logprobs)
             else:
                 logprobs = None
@@ -1642,6 +1664,57 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
             model_runner_output.routed_experts = routed_experts
 
         return model_runner_output
+
+    @jax.jit(static_argnums=(0, ))
+    def _process_target_logits(
+        self,
+        target_logits: jax.Array,
+        spec_decode_metadata: SpecDecodeMetadata,
+        tpu_sampling_metadata: TPUSupportedSamplingMetadata,
+    ) -> jax.Array:
+        # target_logits: [L, vocab]
+        # draft_lengths: [B]
+        # temperature, top_k, top_p: [B]
+        target_logits = target_logits.astype(jnp.float32)
+
+        def local_process(local_logits, local_draft_lengths, local_temp,
+                          local_top_k, local_top_p):
+            segment_ids = jnp.repeat(
+                jnp.arange(local_draft_lengths.shape[0]),
+                local_draft_lengths,
+                total_repeat_length=local_logits.shape[0],
+            )
+            temp = local_temp[segment_ids]
+            top_k = local_top_k[segment_ids]
+            top_p = local_top_p[segment_ids]
+
+            local_meta = TPUSupportedSamplingMetadata(
+                temperature=temp,
+                top_k=top_k,
+                top_p=top_p,
+                do_sampling=tpu_sampling_metadata.do_sampling,
+                logprobs=tpu_sampling_metadata.logprobs,
+            )
+            return _apply_sampling_transforms(local_logits, local_meta)
+
+        return jax.shard_map(
+            local_process,
+            mesh=self.mesh,
+            in_specs=(
+                PartitionSpec(ShardingAxisName.ATTN_DATA),  # target_logits
+                PartitionSpec(ShardingAxisName.ATTN_DATA),  # draft_lengths
+                PartitionSpec(ShardingAxisName.ATTN_DATA),  # temperature
+                PartitionSpec(ShardingAxisName.ATTN_DATA),  # top_k
+                PartitionSpec(ShardingAxisName.ATTN_DATA),  # top_p
+            ),
+            out_specs=PartitionSpec(ShardingAxisName.ATTN_DATA),
+        )(
+            target_logits,
+            spec_decode_metadata.draft_lengths,
+            tpu_sampling_metadata.temperature,
+            tpu_sampling_metadata.top_k,
+            tpu_sampling_metadata.top_p,
+        )
 
     @jax.jit(static_argnums=(0, ))
     def _select_from_array_fn(self, array, indices_to_select):
@@ -1995,17 +2068,16 @@ class TPUModelRunner(KVConnectorModelRunnerMixin, LoRAModelRunnerMixin):
                 cur_rank_req_idxs = req_indices_dp[dp_rank]
                 cur_rank_num_draft_tokens = num_draft_tokens[cur_rank_req_idxs]
 
-                total_active_draft_tokens = np.sum(cur_rank_num_draft_tokens)
-                required_logits_length = (padded_num_reqs_per_dp_rank +
-                                          total_active_draft_tokens)
+                num_sampled_tokens = cur_rank_num_draft_tokens + 1
+                total_sampled_tokens = np.sum(num_sampled_tokens)
                 if padded_logits_length is None:
                     padded_logits_length = runner_utils.get_padded_token_len(
-                        self.num_logits_paddings, required_logits_length)
+                        self.num_logits_paddings, total_sampled_tokens)
                 else:
                     padded_logits_length = max(
                         padded_logits_length,
                         runner_utils.get_padded_token_len(
-                            self.num_logits_paddings, required_logits_length))
+                            self.num_logits_paddings, total_sampled_tokens))
 
             assert padded_logits_length is not None
             logits_indices_shape = (padded_logits_length * dp_size, )

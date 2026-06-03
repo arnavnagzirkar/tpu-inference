@@ -886,7 +886,7 @@ class CompilationManager:
                         jnp.int32,
                         sharding=data_parallel_attn_sharding)
                     target_logits_indices = self._create_dummy_tensor(
-                        (num_logits - num_reqs, ),
+                        (num_logits, ),
                         jnp.int32,
                         sharding=data_parallel_attn_sharding)
                     self._run_compilation(
@@ -929,7 +929,7 @@ class CompilationManager:
                         jnp.int32,
                         sharding=data_parallel_attn_sharding),
                     target_logits_indices=self._create_dummy_tensor(
-                        (num_logits - num_reqs, ),
+                        (num_logits, ),
                         jnp.int32,
                         sharding=data_parallel_attn_sharding),
                     bonus_logits_indices=self._create_dummy_tensor(
@@ -966,9 +966,9 @@ class CompilationManager:
                     PartitionSpec(ShardingAxisName.MLP_DATA,
                                   ShardingAxisName.MLP_TENSOR))
                 target_probs = self._create_dummy_tensor(
-                    (num_logits - num_reqs, vocab_size), jnp.float32, sharding)
-                draft_token_ids = self._create_dummy_tensor(
-                    (num_logits - num_reqs, ), jnp.int32)
+                    (num_logits, vocab_size), jnp.float32, sharding)
+                draft_token_ids = self._create_dummy_tensor((num_logits, ),
+                                                            jnp.int32)
                 num_draft_tokens = self._create_dummy_tensor((num_reqs, ),
                                                              jnp.int32)
                 bonus_token_ids = self._create_dummy_tensor((num_reqs, ),
