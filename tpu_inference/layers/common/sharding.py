@@ -177,27 +177,30 @@ class ShardingConfigManager:
         data_parallelism = parallel_config.data_parallel_size
         enable_dp_attention = sharding_strategy.get("enable_dp_attention",
                                                     False)
-        # vLLM-native multi-process data parallelism: one engine process per
-        # DP rank, fronted by a single load-balanced API endpoint.
-        #
-        # It is not used (we fall back to single-process SPMD DP) when:
-        #  - attention DP is enabled
-        #  - running on Pathways
-        multiprocess_dp = (envs.TPU_MULTIPROCESS_DP and data_parallelism > 1
-                           and not enable_dp_attention
-                           and not vllm_envs.VLLM_TPU_USING_PATHWAYS)
-        if (envs.TPU_MULTIPROCESS_DP and data_parallelism > 1
-                and not multiprocess_dp):
-            raise ValueError(
-                "TPU_MULTIPROCESS_DP is set but is not supported with "
-                "attention DP (enable_dp_attention) or on Pathways. "
-                "Please disable TPU_MULTIPROCESS_DP.")
+        # vLLM-native multi-process data parallelism runs one engine process
+        # per DP rank behind a single load-balanced API endpoint, instead of
+        # tpu-inference's single-process SPMD DP. Only relevant when DP > 1.
+        multiprocess_dp = envs.TPU_MULTIPROCESS_DP and data_parallelism > 1
         if multiprocess_dp:
+            # `vllm serve` sets _api_process_rank to -1; the offline LLM() path
+            # leaves it at the default 0.
+            online_serving = getattr(parallel_config, "_api_process_rank",
+                                     0) == -1
+            if enable_dp_attention or vllm_envs.VLLM_TPU_USING_PATHWAYS:
+                raise ValueError(
+                    "TPU_MULTIPROCESS_DP is not supported with attention DP "
+                    "or on Pathways. Please set TPU_MULTIPROCESS_DP=0.")
+            if not online_serving:
+                raise ValueError(
+                    "TPU_MULTIPROCESS_DP with data_parallel_size > 1 only "
+                    "works for online serving (`vllm serve`); offline "
+                    "LLM().generate() will hang because vLLM-native "
+                    "multi-process DP needs the API frontend to drive each DP "
+                    "rank. For offline data parallelism set "
+                    "TPU_MULTIPROCESS_DP=0 to use single-process SPMD DP "
+                    "(see examples/offline_inference_dp.py).")
+            # vLLM spawns the other ranks; this process owns a single replica.
             data_parallelism = 1
-            logger.warning(
-                "TPU_MULTIPROCESS_DP is enabled: supported for online serving "
-                "only. The offline LLM().generate() API will hang. "
-                "Use `vllm serve` instead.")
         expert_parallelism = sharding_strategy.get("expert_parallelism", 1)
         sequence_parallelism = sharding_strategy.get("sequence_parallelism", 1)
         device_indexes = sharding_strategy.get("device_indexes", None)

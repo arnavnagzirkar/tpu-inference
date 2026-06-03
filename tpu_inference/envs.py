@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     TPU_NAME: str | None = None
     TPU_WORKER_ID: str | None = None
     TPU_MULTIHOST_BACKEND: str = ""
-    TPU_MULTIPROCESS_DP: bool = False
+    TPU_MULTIPROCESS_DP: bool = True
     PREFILL_SLICES: str = ""
     DECODE_SLICES: str = ""
     SKIP_JAX_PRECOMPILE: bool = False
@@ -210,9 +210,12 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Use vLLM-native multi-process data parallelism (one engine process per
     # DP rank, single load-balanced API endpoint) instead of tpu-inference's
     # single-process SPMD data parallelism. Each DP rank is pinned to a
-    # disjoint set of TPU chips. Dense (non-MoE) models only.
+    # disjoint set of TPU chips. Defaults to True, except on Pathways
+    # (JAX_PLATFORMS=proxy) which defaults to False.
     "TPU_MULTIPROCESS_DP":
-    env_bool("TPU_MULTIPROCESS_DP", default=False),
+    lambda: env_bool("TPU_MULTIPROCESS_DP",
+                     default="proxy" not in os.getenv("JAX_PLATFORMS", "").
+                     lower())(),
     # Slice configuration for disaggregated prefill workers
     "PREFILL_SLICES":
     lambda: os.getenv("PREFILL_SLICES", ""),

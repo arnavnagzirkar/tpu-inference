@@ -25,6 +25,7 @@ Example:
 """
 
 import argparse
+import os
 
 from vllm import LLM, SamplingParams
 from vllm.assets.image import ImageAsset
@@ -83,4 +84,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    os.environ.setdefault('TPU_MULTIPROCESS_DP', '0')
     main()

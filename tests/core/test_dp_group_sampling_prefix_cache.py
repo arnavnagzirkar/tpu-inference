@@ -46,6 +46,7 @@ MAX_TOKENS_DEFAULT = 32
 def llm():
     """Shared LLM instance with prefix caching enabled."""
     os.environ.setdefault("SKIP_JAX_PRECOMPILE", "0")
+    os.environ["TPU_MULTIPROCESS_DP"] = "0"
     engine = LLM(
         model=MODEL_NAME,
         max_model_len=MAX_MODEL_LEN,

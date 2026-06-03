@@ -120,5 +120,6 @@ def parse_args():
 
 
 if __name__ == "__main__":
+    os.environ.setdefault('TPU_MULTIPROCESS_DP', '0')
     args = parse_args()
     main(args)

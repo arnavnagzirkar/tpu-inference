@@ -218,6 +218,7 @@ def main(args: dict):
 if __name__ == "__main__":
     # Skip long warmup for local simple test.
     os.environ['SKIP_JAX_PRECOMPILE'] = '1'
+    os.environ.setdefault('TPU_MULTIPROCESS_DP', '0')
 
     parser = create_parser()
     args: dict = vars(parser.parse_args())

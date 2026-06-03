@@ -13,7 +13,7 @@ python examples/multi_modal_inference.py \
   --tensor-parallel-size 1 \
   --num-prompts 1
 """
-
+import os
 from contextlib import contextmanager
 from dataclasses import asdict
 from typing import NamedTuple, Optional
@@ -281,5 +281,6 @@ def main(args):
 
 
 if __name__ == "__main__":
+    os.environ.setdefault('TPU_MULTIPROCESS_DP', '0')
     args = parse_args()
     main(args)

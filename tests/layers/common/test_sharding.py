@@ -23,6 +23,8 @@ from tpu_inference.layers.common.sharding import (LazyShardingAxisName,
 
 class TestShardingConfigManager(unittest.TestCase):
 
+    @patch("tpu_inference.layers.common.sharding.envs.TPU_MULTIPROCESS_DP",
+           False)
     @patch("tpu_inference.layers.common.sharding.envs.NEW_MODEL_DESIGN", True)
     def test_sharding_config_manager_from_vllm_config(self):
         vllm_config = MagicMock()
@@ -307,6 +309,49 @@ class TestShardingConfigManager(unittest.TestCase):
         manager = ShardingConfigManager.from_vllm_config(vllm_config)
         # Should use ss_tensor_parallelism (4)
         self.assertEqual(manager.tp_size, 4)
+
+    @patch(
+        "tpu_inference.layers.common.sharding.vllm_envs."
+        "VLLM_TPU_USING_PATHWAYS", False)
+    @patch("tpu_inference.layers.common.sharding.envs.TPU_MULTIPROCESS_DP",
+           True)
+    @patch("tpu_inference.layers.common.sharding.envs.NEW_MODEL_DESIGN", True)
+    def test_multiprocess_dp_offline_raises(self):
+        # multiprocess DP (default) + offline LLM() (api_process_rank == 0)
+        # is unsupported and must fail fast instead of hanging.
+        vllm_config = MagicMock()
+        vllm_config.parallel_config.tensor_parallel_size = 4
+        vllm_config.parallel_config.data_parallel_size = 2
+        vllm_config.parallel_config.decode_context_parallel_size = 1
+        vllm_config.parallel_config._api_process_rank = 0
+        vllm_config.model_config.use_mla = False
+        vllm_config.speculative_config = None
+        vllm_config.additional_config = {"sharding": {}}
+
+        with self.assertRaisesRegex(ValueError, "TPU_MULTIPROCESS_DP"):
+            ShardingConfigManager.from_vllm_config(vllm_config)
+
+    @patch(
+        "tpu_inference.layers.common.sharding.vllm_envs."
+        "VLLM_TPU_USING_PATHWAYS", False)
+    @patch("tpu_inference.layers.common.sharding.envs.TPU_MULTIPROCESS_DP",
+           True)
+    @patch("tpu_inference.layers.common.sharding.envs.NEW_MODEL_DESIGN", True)
+    def test_multiprocess_dp_online_serving_ok(self):
+        # `vllm serve` sets _api_process_rank == -1; multiprocess DP is
+        # supported there and must not raise.
+        vllm_config = MagicMock()
+        vllm_config.parallel_config.tensor_parallel_size = 4
+        vllm_config.parallel_config.data_parallel_size = 2
+        vllm_config.parallel_config.decode_context_parallel_size = 1
+        vllm_config.parallel_config._api_process_rank = -1
+        vllm_config.model_config.use_mla = False
+        vllm_config.speculative_config = None
+        vllm_config.additional_config = {"sharding": {}}
+
+        manager = ShardingConfigManager.from_vllm_config(vllm_config)
+        # Under multiprocess DP each engine process owns a single replica.
+        self.assertEqual(manager.model_dp_size, 1)
 
 
 class TestLazyShardingAxisName(unittest.TestCase):

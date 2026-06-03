@@ -48,6 +48,7 @@ class InferenceConfig:
 @pytest.fixture(autouse=True)
 def setup_new_model_design():
     os.environ['NEW_MODEL_DESIGN'] = '1'
+    os.environ['TPU_MULTIPROCESS_DP'] = '0'
 
 
 def generate_test_prompts(num_prompts: int = 256) -> list[str]:
