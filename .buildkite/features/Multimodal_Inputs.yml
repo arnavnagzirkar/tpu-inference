@@ -14,7 +14,7 @@
 
 steps:
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Correctness tests for Multimodal Inputs"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_Multimodal_Inputs_CorrectnessTest"
+    key: "${BK_KEY}_Multimodal_Inputs_CorrectnessTest"
     soft_fail: true
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
@@ -24,8 +24,8 @@ steps:
     commands:
       - .buildkite/scripts/run_in_docker.sh python3 -m pytest -s -v /workspace/tpu_inference/tests/e2e/test_multi_modal_inference.py
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Record correctness test result for Multimodal Inputs"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_Multimodal_Inputs_CorrectnessTest"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_Multimodal_Inputs_CorrectnessTest"
+    key: "${BK_KEY}_record_Multimodal_Inputs_CorrectnessTest"
+    depends_on: "${BK_KEY}_Multimodal_Inputs_CorrectnessTest"
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
       CI_TPU_VERSION: "${TPU_VERSION:-tpu6e}"
@@ -36,11 +36,11 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_Multimodal_Inputs_CorrectnessTest
+        .buildkite/scripts/record_step_result.sh ${BK_KEY}_Multimodal_Inputs_CorrectnessTest
 
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Performance tests for Multimodal Inputs"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_Multimodal_Inputs_PerformanceTest"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_Multimodal_Inputs_CorrectnessTest"
+    key: "${BK_KEY}_Multimodal_Inputs_PerformanceTest"
+    depends_on: "${BK_KEY}_record_Multimodal_Inputs_CorrectnessTest"
     soft_fail: true
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
@@ -49,8 +49,8 @@ steps:
     commands:
       - .buildkite/scripts/run_in_docker.sh bash /workspace/tpu_inference/tests/e2e/benchmarking/mm_bench.sh
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Record performance test result for Multimodal Inputs"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_Multimodal_Inputs_PerformanceTest"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_Multimodal_Inputs_PerformanceTest"
+    key: "${BK_KEY}_record_Multimodal_Inputs_PerformanceTest"
+    depends_on: "${BK_KEY}_Multimodal_Inputs_PerformanceTest"
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
       CI_TPU_VERSION: "${TPU_VERSION:-tpu6e}"
@@ -61,4 +61,4 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_Multimodal_Inputs_PerformanceTest
+        .buildkite/scripts/record_step_result.sh ${BK_KEY}_Multimodal_Inputs_PerformanceTest

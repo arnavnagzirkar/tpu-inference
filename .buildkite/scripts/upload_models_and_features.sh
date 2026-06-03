@@ -142,6 +142,7 @@ if [[ "${#pipeline_v6e_fragments[@]}" -gt 0 ]]; then
   # Loop through each model implementation type
   for IMPL_TYPE in "${FRAMEWORKS[@]}"; do
     export MODEL_IMPL_TYPE="${IMPL_TYPE}"
+    export BK_KEY="${TPU_VERSION}_${MODEL_IMPL_TYPE}"
     echo "Uploading v6e pipeline group for: ${MODEL_IMPL_TYPE}"
     {
       echo "priority: ${JOB_PRIORITY:-1}"
@@ -170,6 +171,7 @@ if [[ "${#pipeline_v7x_fragments[@]}" -gt 0 ]]; then
   # Loop through each model implementation type
   for IMPL_TYPE in "${FRAMEWORKS[@]}"; do
     export MODEL_IMPL_TYPE="${IMPL_TYPE}"
+    export BK_KEY="${TPU_VERSION}_${MODEL_IMPL_TYPE}"
     echo "Uploading v7x pipeline group for: ${MODEL_IMPL_TYPE}"
     {
       echo "priority: ${JOB_PRIORITY:-1}"

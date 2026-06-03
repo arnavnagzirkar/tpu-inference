@@ -14,7 +14,7 @@
 
 steps:
   - label: "${{TPU_VERSION:-tpu6e}} ${{MODEL_IMPL_TYPE:-vllm}} Correctness tests for {FEATURE_NAME}"
-    key: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_{SANITIZED_FEATURE_NAME}_CorrectnessTest"
+    key: "${{BK_KEY}}_{SANITIZED_FEATURE_NAME}_CorrectnessTest"
     soft_fail: true
     env:
       MODEL_IMPL_TYPE: "${{MODEL_IMPL_TYPE:-vllm}}"
@@ -23,8 +23,8 @@ steps:
     commands:
       - echo "placeholder"  # TODO : replace with your correctness test command
   - label: "${{TPU_VERSION:-tpu6e}} ${{MODEL_IMPL_TYPE:-vllm}} Record correctness test result for {FEATURE_NAME}"
-    key: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_record_{SANITIZED_FEATURE_NAME}_CorrectnessTest"
-    depends_on: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_{SANITIZED_FEATURE_NAME}_CorrectnessTest"
+    key: "${{BK_KEY}}_record_{SANITIZED_FEATURE_NAME}_CorrectnessTest"
+    depends_on: "${{BK_KEY}}_{SANITIZED_FEATURE_NAME}_CorrectnessTest"
     env:
       MODEL_IMPL_TYPE: "${{MODEL_IMPL_TYPE:-vllm}}"
       CI_TPU_VERSION: "${{TPU_VERSION:-tpu6e}}"
@@ -35,11 +35,11 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_{SANITIZED_FEATURE_NAME}_CorrectnessTest
+        .buildkite/scripts/record_step_result.sh ${{BK_KEY}}_{SANITIZED_FEATURE_NAME}_CorrectnessTest
 
   - label: "${{TPU_VERSION:-tpu6e}} ${{MODEL_IMPL_TYPE:-vllm}} Performance tests for {FEATURE_NAME}"
-    key: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_{SANITIZED_FEATURE_NAME}_PerformanceTest"
-    depends_on: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_record_{SANITIZED_FEATURE_NAME}_CorrectnessTest"
+    key: "${{BK_KEY}}_{SANITIZED_FEATURE_NAME}_PerformanceTest"
+    depends_on: "${{BK_KEY}}_record_{SANITIZED_FEATURE_NAME}_CorrectnessTest"
     soft_fail: true
     env:
       MODEL_IMPL_TYPE: "${{MODEL_IMPL_TYPE:-vllm}}"
@@ -48,8 +48,8 @@ steps:
     commands:
       - echo "placeholder"  # TODO : replace with your performance test command
   - label: "${{TPU_VERSION:-tpu6e}} ${{MODEL_IMPL_TYPE:-vllm}} Record performance test result for {FEATURE_NAME}"
-    key: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_record_{SANITIZED_FEATURE_NAME}_PerformanceTest"
-    depends_on: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_{SANITIZED_FEATURE_NAME}_PerformanceTest"
+    key: "${{BK_KEY}}_record_{SANITIZED_FEATURE_NAME}_PerformanceTest"
+    depends_on: "${{BK_KEY}}_{SANITIZED_FEATURE_NAME}_PerformanceTest"
     env:
       MODEL_IMPL_TYPE: "${{MODEL_IMPL_TYPE:-vllm}}"
       CI_TPU_VERSION: "${{TPU_VERSION:-tpu6e}}"
@@ -60,4 +60,4 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_{SANITIZED_FEATURE_NAME}_PerformanceTest
+        .buildkite/scripts/record_step_result.sh ${{BK_KEY}}_{SANITIZED_FEATURE_NAME}_PerformanceTest

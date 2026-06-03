@@ -14,7 +14,7 @@
 
 steps:
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Correctness tests for Speculative Decoding: Ngram"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_Speculative_Decoding-_Ngram_CorrectnessTest"
+    key: "${BK_KEY}_Speculative_Decoding-_Ngram_CorrectnessTest"
     soft_fail: true
     agents:
       queue: "${TPU_QUEUE_SINGLE:-tpu_v6e_queue}"
@@ -27,8 +27,8 @@ steps:
           python3 -m pytest -s -v /workspace/tpu_inference/tests/e2e/test_speculative_decoding.py::test_ngram_correctness_greedy \
           /workspace/tpu_inference/tests/e2e/test_speculative_decoding.py::test_ngram_correctness_random
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Record correctness test result for Speculative Decoding: Ngram"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_Speculative_Decoding-_Ngram_CorrectnessTest"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_Speculative_Decoding-_Ngram_CorrectnessTest"
+    key: "${BK_KEY}_record_Speculative_Decoding-_Ngram_CorrectnessTest"
+    depends_on: "${BK_KEY}_Speculative_Decoding-_Ngram_CorrectnessTest"
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
       CI_TPU_VERSION: "${TPU_VERSION:-tpu6e}"
@@ -39,11 +39,11 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_Speculative_Decoding-_Ngram_CorrectnessTest
+        .buildkite/scripts/record_step_result.sh ${BK_KEY}_Speculative_Decoding-_Ngram_CorrectnessTest
 
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Performance tests for Speculative Decoding: Ngram"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_Speculative_Decoding-_Ngram_PerformanceTest"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_Speculative_Decoding-_Ngram_CorrectnessTest"
+    key: "${BK_KEY}_Speculative_Decoding-_Ngram_PerformanceTest"
+    depends_on: "${BK_KEY}_record_Speculative_Decoding-_Ngram_CorrectnessTest"
     soft_fail: true
     agents:
       queue: "${TPU_QUEUE_SINGLE:-tpu_v6e_queue}"
@@ -57,8 +57,8 @@ steps:
           /workspace/tpu_inference/tests/e2e/test_speculative_decoding.py::test_ngram_performance_random
 
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Record performance test result for Speculative Decoding: Ngram"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_Speculative_Decoding-_Ngram_PerformanceTest"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_Speculative_Decoding-_Ngram_PerformanceTest"
+    key: "${BK_KEY}_record_Speculative_Decoding-_Ngram_PerformanceTest"
+    depends_on: "${BK_KEY}_Speculative_Decoding-_Ngram_PerformanceTest"
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
       CI_TPU_VERSION: "${TPU_VERSION:-tpu6e}"
@@ -69,4 +69,4 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_Speculative_Decoding-_Ngram_PerformanceTest
+        .buildkite/scripts/record_step_result.sh ${BK_KEY}_Speculative_Decoding-_Ngram_PerformanceTest

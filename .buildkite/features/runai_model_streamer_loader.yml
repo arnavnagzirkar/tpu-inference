@@ -19,7 +19,7 @@
 # disk-based loading method.
 steps:
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Correctness Test | Runai Model Streamer JAX UniProcExecutor"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_runai_model_streamer_loader_jax_uniproc"
+    key: "${BK_KEY}_runai_model_streamer_loader_jax_uniproc"
     soft_fail: true
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
@@ -28,8 +28,8 @@ steps:
     commands:
       - .buildkite/scripts/run_in_docker.sh python3 -m pytest -s -v /workspace/tpu_inference/tests/e2e/test_runai_model_streamer_loader.py::test_correctness_jax_uni_proc_executor
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Record Result | Runai Model Streamer JAX UniProcExecutor"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_runai_model_streamer_loader_jax_uniproc"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_runai_model_streamer_loader_jax_uniproc"
+    key: "${BK_KEY}_record_runai_model_streamer_loader_jax_uniproc"
+    depends_on: "${BK_KEY}_runai_model_streamer_loader_jax_uniproc"
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
       CI_TPU_VERSION: "${TPU_VERSION:-tpu6e}"
@@ -40,9 +40,9 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_runai_model_streamer_loader_jax_uniproc
+        .buildkite/scripts/record_step_result.sh ${BK_KEY}_runai_model_streamer_loader_jax_uniproc
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Correctness Test | Runai Model Streamer Torchax UniProcExecutor"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_runai_model_streamer_loader_torchax_uniproc"
+    key: "${BK_KEY}_runai_model_streamer_loader_torchax_uniproc"
     soft_fail: true
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
@@ -51,8 +51,8 @@ steps:
     commands:
       - .buildkite/scripts/run_in_docker.sh python3 -m pytest -s -v /workspace/tpu_inference/tests/e2e/test_runai_model_streamer_loader.py::test_correctness_torchax_uni_proc_executor
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Record Result | Runai Model Streamer Torchax UniProcExecutor"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_runai_model_streamer_loader_torchax_uniproc"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_runai_model_streamer_loader_torchax_uniproc"
+    key: "${BK_KEY}_record_runai_model_streamer_loader_torchax_uniproc"
+    depends_on: "${BK_KEY}_runai_model_streamer_loader_torchax_uniproc"
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
       CI_TPU_VERSION: "${TPU_VERSION:-tpu6e}"
@@ -63,9 +63,9 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_runai_model_streamer_loader_torchax_uniproc
+        .buildkite/scripts/record_step_result.sh ${BK_KEY}_runai_model_streamer_loader_torchax_uniproc
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Correctness Test | Runai Model Streamer Torchax RayDistributedExecutor"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_runai_model_streamer_loader_torchax_ray_distributed"
+    key: "${BK_KEY}_runai_model_streamer_loader_torchax_ray_distributed"
     soft_fail: true
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
@@ -74,8 +74,8 @@ steps:
     commands:
       - .buildkite/scripts/run_in_docker.sh python3 -m pytest -s -v /workspace/tpu_inference/tests/e2e/test_runai_model_streamer_loader.py::test_correctness_torchax_ray_distributed_executor
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Record Result | Runai Model Streamer Torchax RayDistributedExecutor"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_runai_model_streamer_loader_torchax_ray_distributed"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_runai_model_streamer_loader_torchax_ray_distributed"
+    key: "${BK_KEY}_record_runai_model_streamer_loader_torchax_ray_distributed"
+    depends_on: "${BK_KEY}_runai_model_streamer_loader_torchax_ray_distributed"
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
       CI_TPU_VERSION: "${TPU_VERSION:-tpu6e}"
@@ -86,4 +86,4 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_runai_model_streamer_loader_torchax_ray_distributed
+        .buildkite/scripts/record_step_result.sh ${BK_KEY}_runai_model_streamer_loader_torchax_ray_distributed

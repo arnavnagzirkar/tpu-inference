@@ -14,7 +14,7 @@
 
 steps:
   - label: "${{TPU_VERSION:-tpu6e}} ${{MODEL_IMPL_TYPE:-vllm}} Unit tests for {MODEL_NAME}/{CATEGORY}"
-    key: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_{SANITIZED_MODEL_NAME}_{CATEGORY}_UnitTest"
+    key: "${{BK_KEY}}_{SANITIZED_MODEL_NAME}_{CATEGORY}_UnitTest"
     env:
       MODEL_IMPL_TYPE: "${{MODEL_IMPL_TYPE:-vllm}}"
     agents:
@@ -23,8 +23,8 @@ steps:
     commands:
       - echo "placeholder"  # TODO: replace with your unit test command
   - label: "${{TPU_VERSION:-tpu6e}} ${{MODEL_IMPL_TYPE:-vllm}} Record unit test result for {MODEL_NAME}/{CATEGORY}"
-    key: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_record_{SANITIZED_MODEL_NAME}_{CATEGORY}_UnitTest"
-    depends_on: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_{SANITIZED_MODEL_NAME}_{CATEGORY}_UnitTest"
+    key: "${{BK_KEY}}_record_{SANITIZED_MODEL_NAME}_{CATEGORY}_UnitTest"
+    depends_on: "${{BK_KEY}}_{SANITIZED_MODEL_NAME}_{CATEGORY}_UnitTest"
     env:
       MODEL_IMPL_TYPE: "${{MODEL_IMPL_TYPE:-vllm}}"
       CI_TPU_VERSION: "${{TPU_VERSION:-tpu6e}}"
@@ -35,11 +35,11 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_{SANITIZED_MODEL_NAME}_{CATEGORY}_UnitTest
+        .buildkite/scripts/record_step_result.sh ${{BK_KEY}}_{SANITIZED_MODEL_NAME}_{CATEGORY}_UnitTest
 
   - label: "${{TPU_VERSION:-tpu6e}} ${{MODEL_IMPL_TYPE:-vllm}} Accuracy for {MODEL_NAME}/{CATEGORY}"
-    key: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_{SANITIZED_MODEL_NAME}_{CATEGORY}_Accuracy"
-    depends_on: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_record_{SANITIZED_MODEL_NAME}_{CATEGORY}_UnitTest"
+    key: "${{BK_KEY}}_{SANITIZED_MODEL_NAME}_{CATEGORY}_Accuracy"
+    depends_on: "${{BK_KEY}}_record_{SANITIZED_MODEL_NAME}_{CATEGORY}_UnitTest"
     agents:
       queue: "{QUEUE}"
     soft_fail: true
@@ -53,8 +53,8 @@ steps:
       - |
         .buildkite/scripts/run_in_docker.sh bash /workspace/tpu_inference/tests/e2e/benchmarking/test_accuracy.sh
   - label: "${{TPU_VERSION:-tpu6e}} ${{MODEL_IMPL_TYPE:-vllm}} Record accuracy result for {MODEL_NAME}/{CATEGORY}"
-    key: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_record_{SANITIZED_MODEL_NAME}_{CATEGORY}_Accuracy"
-    depends_on: "${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_{SANITIZED_MODEL_NAME}_{CATEGORY}_Accuracy"
+    key: "${{BK_KEY}}_record_{SANITIZED_MODEL_NAME}_{CATEGORY}_Accuracy"
+    depends_on: "${{BK_KEY}}_{SANITIZED_MODEL_NAME}_{CATEGORY}_Accuracy"
     env:
       MODEL_IMPL_TYPE: "${{MODEL_IMPL_TYPE:-vllm}}"
       CI_TPU_VERSION: "${{TPU_VERSION:-tpu6e}}"
@@ -65,4 +65,4 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${{TPU_VERSION:-tpu6e}}_${{MODEL_IMPL_TYPE:-vllm}}_{SANITIZED_MODEL_NAME}_{CATEGORY}_Accuracy
+        .buildkite/scripts/record_step_result.sh ${{BK_KEY}}_{SANITIZED_MODEL_NAME}_{CATEGORY}_Accuracy

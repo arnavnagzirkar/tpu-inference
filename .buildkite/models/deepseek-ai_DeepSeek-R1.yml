@@ -14,14 +14,14 @@
 
 steps:
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Unit tests for deepseek-ai/DeepSeek-R1"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_deepseek-ai_DeepSeek-R1_UnitTest"
+    key: "${BK_KEY}_deepseek-ai_DeepSeek-R1_UnitTest"
     soft_fail: true
     agents:
       queue: "${TPU_QUEUE_SINGLE:-tpu_v6e_queue}"
     commands:
       - |
-        if [ "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}" = "tpu6e" ]; then
-          buildkite-agent meta-data set "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_deepseek-ai_DeepSeek-R1_UnitTest" "not enough HBM"
+        if [ "${BK_KEY}" = "tpu6e" ]; then
+          buildkite-agent meta-data set "${BK_KEY}_deepseek-ai_DeepSeek-R1_UnitTest" "not enough HBM"
         else
           .buildkite/scripts/run_in_docker.sh \
             bash /workspace/tpu_inference/tests/e2e/benchmarking/mlperf.sh -m "gs://tpu-commons-ci/deepseek/r1"
@@ -37,8 +37,8 @@ steps:
       MODEL_IMPL_TYPE: "flax_nnx"
 
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Record unit test result for deepseek-ai/DeepSeek-R1"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_deepseek-ai_DeepSeek-R1_UnitTest"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_deepseek-ai_DeepSeek-R1_UnitTest"
+    key: "${BK_KEY}_record_deepseek-ai_DeepSeek-R1_UnitTest"
+    depends_on: "${BK_KEY}_deepseek-ai_DeepSeek-R1_UnitTest"
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
       CI_TPU_VERSION: "${TPU_VERSION:-tpu6e}"
@@ -49,11 +49,11 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_deepseek-ai_DeepSeek-R1_UnitTest
+        .buildkite/scripts/record_step_result.sh ${BK_KEY}_deepseek-ai_DeepSeek-R1_UnitTest
 
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Accuracy for deepseek-ai/DeepSeek-R1"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_deepseek-ai_DeepSeek-R1_Accuracy"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_deepseek-ai_DeepSeek-R1_UnitTest"
+    key: "${BK_KEY}_deepseek-ai_DeepSeek-R1_Accuracy"
+    depends_on: "${BK_KEY}_record_deepseek-ai_DeepSeek-R1_UnitTest"
     soft_fail: true
     agents:
       queue: ${TPU_QUEUE_MULTI:-tpu_v6e_8_queue}
@@ -69,15 +69,15 @@ steps:
       MINIMUM_ACCURACY_THRESHOLD: "0.84"  # TODO : replace 0 with your accuracy threshold
     commands:
       - |
-        if [ "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}" = "tpu6e" ]; then
-          buildkite-agent meta-data set "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_deepseek-ai_DeepSeek-R1_Accuracy" "not enough HBM"
+        if [ "${BK_KEY}" = "tpu6e" ]; then
+          buildkite-agent meta-data set "${BK_KEY}_deepseek-ai_DeepSeek-R1_Accuracy" "not enough HBM"
         else
           .buildkite/scripts/run_in_docker.sh \
             bash /workspace/tpu_inference/tests/e2e/benchmarking/mmlu.sh -m  "gs://tpu-commons-ci/deepseek/r1" -n 14042 -l 4
         fi
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Record accuracy result for deepseek-ai/DeepSeek-R1"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_deepseek-ai_DeepSeek-R1_Accuracy"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_deepseek-ai_DeepSeek-R1_Accuracy"
+    key: "${BK_KEY}_record_deepseek-ai_DeepSeek-R1_Accuracy"
+    depends_on: "${BK_KEY}_deepseek-ai_DeepSeek-R1_Accuracy"
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
       CI_TPU_VERSION: "${TPU_VERSION:-tpu6e}"
@@ -88,11 +88,11 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_deepseek-ai_DeepSeek-R1_Accuracy
+        .buildkite/scripts/record_step_result.sh ${BK_KEY}_deepseek-ai_DeepSeek-R1_Accuracy
 
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Performance benchmarks for deepseek-ai/DeepSeek-R1"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_deepseek-ai_DeepSeek-R1_Benchmark"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_deepseek-ai_DeepSeek-R1_Accuracy"
+    key: "${BK_KEY}_deepseek-ai_DeepSeek-R1_Benchmark"
+    depends_on: "${BK_KEY}_record_deepseek-ai_DeepSeek-R1_Accuracy"
     soft_fail: true
     agents:
       queue: cpu  # TODO: replace with execution environment
@@ -103,10 +103,10 @@ steps:
       MINIMUM_THROUGHPUT_THRESHOLD: 0  # TODO : replace 0 with your performance threshold
     commands:
       - |
-        buildkite-agent meta-data set "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_deepseek-ai_DeepSeek-R1_Benchmark" "unverified"
+        buildkite-agent meta-data set "${BK_KEY}_deepseek-ai_DeepSeek-R1_Benchmark" "unverified"
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Record performance benchmark result for deepseek-ai/DeepSeek-R1"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_deepseek-ai_DeepSeek-R1_Benchmark"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_deepseek-ai_DeepSeek-R1_Benchmark"
+    key: "${BK_KEY}_record_deepseek-ai_DeepSeek-R1_Benchmark"
+    depends_on: "${BK_KEY}_deepseek-ai_DeepSeek-R1_Benchmark"
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
       CI_TPU_VERSION: "${TPU_VERSION:-tpu6e}"
@@ -117,4 +117,4 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_deepseek-ai_DeepSeek-R1_Benchmark
+        .buildkite/scripts/record_step_result.sh ${BK_KEY}_deepseek-ai_DeepSeek-R1_Benchmark

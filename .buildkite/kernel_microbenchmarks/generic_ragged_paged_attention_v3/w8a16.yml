@@ -14,7 +14,7 @@
 
 steps:
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Correctness tests for generic ragged paged attention v3-w8a16"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_generic_ragged_paged_attention_v3-w8a16_CorrectnessTest"
+    key: "${BK_KEY}_generic_ragged_paged_attention_v3-w8a16_CorrectnessTest"
     soft_fail: true
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
@@ -22,10 +22,10 @@ steps:
       queue: "${TPU_QUEUE_SINGLE:-tpu_v6e_queue}"
     commands:
       - |
-        buildkite-agent meta-data set "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_generic_ragged_paged_attention_v3-w8a16_CorrectnessTest" "unverified"
+        buildkite-agent meta-data set "${BK_KEY}_generic_ragged_paged_attention_v3-w8a16_CorrectnessTest" "unverified"
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Record correctness test result for generic ragged paged attention v3 w8a16"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_generic_ragged_paged_attention_v3-w8a16_CorrectnessTest"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_generic_ragged_paged_attention_v3-w8a16_CorrectnessTest"
+    key: "${BK_KEY}_record_generic_ragged_paged_attention_v3-w8a16_CorrectnessTest"
+    depends_on: "${BK_KEY}_generic_ragged_paged_attention_v3-w8a16_CorrectnessTest"
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
       CI_TPU_VERSION: "${TPU_VERSION:-tpu6e}"
@@ -36,11 +36,11 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_generic_ragged_paged_attention_v3-w8a16_CorrectnessTest
+        .buildkite/scripts/record_step_result.sh ${BK_KEY}_generic_ragged_paged_attention_v3-w8a16_CorrectnessTest
 
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Performance tests for generic ragged paged attention v3-w8a16"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_generic_ragged_paged_attention_v3-w8a16_PerformanceTest"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_generic_ragged_paged_attention_v3-w8a16_CorrectnessTest"
+    key: "${BK_KEY}_generic_ragged_paged_attention_v3-w8a16_PerformanceTest"
+    depends_on: "${BK_KEY}_record_generic_ragged_paged_attention_v3-w8a16_CorrectnessTest"
     soft_fail: true
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
@@ -48,10 +48,10 @@ steps:
       queue: "${TPU_QUEUE_SINGLE:-tpu_v6e_queue}"
     commands:
       - |
-        buildkite-agent meta-data set "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_generic_ragged_paged_attention_v3-w8a16_PerformanceTest" "unverified"
+        buildkite-agent meta-data set "${BK_KEY}_generic_ragged_paged_attention_v3-w8a16_PerformanceTest" "unverified"
   - label: "${TPU_VERSION:-tpu6e} ${MODEL_IMPL_TYPE:-vllm} Record performance test result for generic ragged paged attention v3-w8a16"
-    key: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_record_generic_ragged_paged_attention_v3-w8a16_PerformanceTest"
-    depends_on: "${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_generic_ragged_paged_attention_v3-w8a16_PerformanceTest"
+    key: "${BK_KEY}_record_generic_ragged_paged_attention_v3-w8a16_PerformanceTest"
+    depends_on: "${BK_KEY}_generic_ragged_paged_attention_v3-w8a16_PerformanceTest"
     env:
       MODEL_IMPL_TYPE: "${MODEL_IMPL_TYPE:-vllm}"
       CI_TPU_VERSION: "${TPU_VERSION:-tpu6e}"
@@ -62,4 +62,4 @@ steps:
       queue: cpu
     commands:
       - |
-        .buildkite/scripts/record_step_result.sh ${TPU_VERSION:-tpu6e}_${MODEL_IMPL_TYPE:-vllm}_generic_ragged_paged_attention_v3-w8a16_PerformanceTest
+        .buildkite/scripts/record_step_result.sh ${BK_KEY}_generic_ragged_paged_attention_v3-w8a16_PerformanceTest
